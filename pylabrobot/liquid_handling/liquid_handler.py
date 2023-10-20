@@ -30,6 +30,7 @@ from pylabrobot.resources import (
   Well,
   TipTracker,
   does_tip_tracking,
+  set_tip_tracking,
   does_volume_tracking
 )
 from pylabrobot.resources.errors import NoTipError
@@ -256,17 +257,68 @@ class LiquidHandler(MachineFrontend):
     if not len(invalid_channels) == 0:
       raise ValueError(f"Invalid channels: {invalid_channels}")
 
+  def find_tips(
+      self, 
+      tip_spots_needed: int,
+      tip_racks: List[TipRack] = []
+  ) -> List[TipSpot]:
+    
+    """ Finds the next full tip spots on any tip carrier.
+
+    Args: 
+      tip_spots_needed: How many tips to search for.
+      tip_racks: Which racks to search for tips on. (defaults to all)
+
+    Returns:
+      A list of tip spots where tracker.has_tip (from the given racks if specified)
+
+    """
+
+    tip_spots: List[TipSpot] = []
+    
+    if not tip_racks:
+      for og_resource in self.deck.children: # get all available tip racks
+        if og_resource.category == 'tip_carrier':
+          for site in og_resource.children:
+            tip_racks += site.children
+
+    for tip_rack in tip_racks:
+      for tip_spot in tip_rack.children:
+        if tip_spot.tracker.has_tip:
+          tip_spots.append(tip_spot)
+          tip_spots_needed -= 1
+          if tip_spots_needed <= 0:
+            return tip_spots
+    return None            
+
+  def set_tip_tracking(self, enabled):
+    set_tip_tracking(enabled)
+
   @need_setup_finished
   async def pick_up_tips(
     self,
-    tip_spots: List[TipSpot],
+    num_tips: int = None,
+    tip_spots: List[TipSpot] = None,
     use_channels: Optional[List[int]] = None,
     offsets: Optional[Union[Coordinate, List[Optional[Coordinate]]]] = None,
+    tip_racks: List[TipRack] = [],
     **backend_kwargs
   ):
-    """ Pick up tips from a resource.
+    """ Pick up tips from a resource. 
 
     Examples:
+      Pick up two tips.
+
+      >>> lh.pick_up_tips(2)
+
+      Put tips on the first three channels.
+
+      >>> lh.pick_up_tips(use_channels=[0,1,2])
+
+      Pick up 3 tips from a specific list of tips resources:
+
+      >>> lh.pick_up_tips(3, tip_racks =['tips_resource1,tips_resource2])
+
       Pick up all tips in the first column.
 
       >>> lh.pick_up_tips(tips_resource["A1":"H1"])
@@ -291,11 +343,13 @@ class LiquidHandler(MachineFrontend):
       ... )
 
     Args:
+      num_tips: How many tips to pick up, especially if tip_spots or use_channels are not specified
       tip_spots: List of tip spots to pick up tips from.
       use_channels: List of channels to use. Index from front to back. If `None`, the first
         `len(channels)` channels will be used.
       offsets: List of offsets for each channel, a translation that will be applied to the tip
         drop location. If `None`, no offset will be applied.
+      tip_racks: Which racks to look for tips on (only if tip_spots is not specified)
       backend_kwargs: Additional keyword arguments for the backend, optional.
 
     Raises:
@@ -308,7 +362,26 @@ class LiquidHandler(MachineFrontend):
       NoTipError: If a spot does not have a tip.
     """
 
+    ### Kaizen's code here:
+    if not num_tips:
+      if tip_spots:
+        num_tips = len(tip_spots)
+      elif use_channels:
+        num_tips = len(use_channels)
+      else:
+        raise KeyError("Must specify one of num_tips, tip_spots, or use_channels")
+    if tip_spots is None:
+      assert does_tip_tracking(), \
+      "Must specify tip spots when tip tracking is disabled."
+      tip_spots = self.find_tips(num_tips,tip_racks)
+      assert tip_spots is not None, \
+      "Could not find available tips."
+      
     self._assert_resources_exist(tip_spots)
+
+    ## Original code here
+    # self._assert_resources_exist(tip_spots)
+    
 
     offsets = expand(offsets, len(tip_spots))
 
