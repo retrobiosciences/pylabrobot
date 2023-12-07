@@ -12,6 +12,8 @@ import time
 from typing import Any, Callable, Dict, Union, Optional, List, Sequence, Set, Tuple
 import warnings
 
+from attr import dataclass
+
 from pylabrobot.machine import MachineFrontend, need_setup_finished
 from pylabrobot.liquid_handling.strictness import Strictness, get_strictness
 from pylabrobot.plate_reading import PlateReader
@@ -52,7 +54,20 @@ from .standard import (
 
 logger = logging.getLogger("pylabrobot")
 
+@dataclass(frozen=True)
+class TransferWell:
+  volume: float
+  container: Container
 
+
+@dataclass(frozen=True)
+class TransferAspiration(TransferWell):
+  pass
+@dataclass(frozen=True)
+class TransferDispense(TransferWell):
+  homogenization_volume: float = 0
+  homogenization_cycles: int = 0
+  
 class LiquidHandler(MachineFrontend):
   """
   Front end for liquid handlers.
@@ -439,7 +454,8 @@ class LiquidHandler(MachineFrontend):
     tips = []
     for channel in use_channels:
       tip = self.head[channel].get_tip()
-      if tip.tracker.get_used_volume() > 0 and not allow_nonzero_volume:
+      # Todo: give actual error message.
+      if not allow_nonzero_volume and tip.tracker.get_used_volume() > 0:
         raise RuntimeError(f"Cannot drop tip with volume {tip.tracker.get_used_volume()}")
       tips.append(tip)
 
@@ -544,6 +560,7 @@ class LiquidHandler(MachineFrontend):
         use_channels=use_channels,
         offsets=offsets,
         **backend_kwargs)
+
 
   @need_setup_finished
   async def aspirate(
@@ -845,87 +862,47 @@ class LiquidHandler(MachineFrontend):
     if end_delay > 0:
       time.sleep(end_delay)
 
+
   async def transfer(
-    self,
-    source: Well,
-    targets: Union[Well, List[Well]],
-    source_vol: Optional[float] = None,
-    ratios: Optional[List[float]] = None,
-    target_vols: Optional[List[float]] = None,
-    aspiration_flow_rate: Optional[float] = None,
-    dispense_flow_rates: Optional[Union[float, List[Optional[float]]]] = None,
-    **backend_kwargs
+      self: LiquidHandler,
+      instructions: List[tuple[TransferAspiration, TransferDispense]],
   ):
-    """Transfer liquid from one well to another.
+    TOTAL_AVAILABLE_TIPS = 8
+    assert len(instructions) <= TOTAL_AVAILABLE_TIPS, f"Cannot have more than {TOTAL_AVAILABLE_TIPS} instructions, got {len(instructions)}"
+    assert not any(
+       instruction[0].volume < instruction[1].volume for instruction in instructions
+    ), f"Cannot dispense more than you aspirate"
 
-    Examples:
-
-      Transfer 50 uL of liquid from the first well to the second well:
-
-      >>> lh.transfer(plate["A1"], plate["B1"], source_vol=50)
-
-      Transfer 80 uL of liquid from the first well equally to the first column:
-
-      >>> lh.transfer(plate["A1"], plate["A1:H1"], source_vol=80)
-
-      Transfer 60 uL of liquid from the first well in a 1:2 ratio to 2 other wells:
-
-      >>> lh.transfer(plate["A1"], plate["B1:C1"], source_vol=60, ratios=[2, 1])
-
-      Transfer arbitrary volumes to the first column:
-
-      >>> lh.transfer(plate["A1"], plate["A1:H1"], target_vols=[3, 1, 4, 1, 5, 9, 6, 2])
-
-    Args:
-      source: The source well.
-      targets: The target wells.
-      source_vol: The volume to transfer from the source well.
-      ratios: The ratios to use when transferring liquid to the target wells. If not specified, then
-        the volumes will be distributed equally.
-      target_vols: The volumes to transfer to the target wells. If specified, `source_vols` and
-        `ratios` must be `None`.
-      aspiration_flow_rate: The flow rate to use when aspirating, in ul/s. If `None`, the backend
-        default will be used.
-      dispense_flow_rates: The flow rates to use when dispensing, in ul/s. If `None`, the backend
-        default will be used. Either a single flow rate for all channels, or a list of flow rates,
-        one for each target well.
-
-    Raises:
-      RuntimeError: If the setup has not been run. See :meth:`~LiquidHandler.setup`.
-    """
-
-    if isinstance(targets, Well):
-      targets = [targets]
-
-    if isinstance(dispense_flow_rates, numbers.Rational):
-      dispense_flow_rates = [dispense_flow_rates] * len(targets)
-
-    if target_vols is not None:
-      if ratios is not None:
-        raise TypeError("Cannot specify ratios and target_vols at the same time")
-      if source_vol is not None:
-        raise TypeError("Cannot specify source_vol and target_vols at the same time")
-    else:
-      if source_vol is None:
-        raise TypeError("Must specify either source_vol or target_vols")
-
-      if ratios is None:
-        ratios = [1] * len(targets)
-
-      target_vols = [source_vol * r / sum(ratios) for r in ratios]
-
+    channels = list(range(len(instructions)))
     await self.aspirate(
-      resources=[source],
-      vols=[sum(target_vols)],
-      flow_rates=aspiration_flow_rate,
-      **backend_kwargs)
-    for target, vol in zip(targets, target_vols):
-      await self.dispense(
-        resources=[target],
-        vols=vol,
-        flow_rates=dispense_flow_rates,
-        use_channels=[0],
-        **backend_kwargs)
+      resources=[instruction[0].container for instruction in instructions],
+      vols=[instruction[0].volume for instruction in instructions],
+      use_channels=channels,
+      # todo should pass all backend kwargs from transfer to aspirate
+    )
+    await self.dispense(
+      resources=[instruction[1].container for instruction in instructions],
+      vols=[instruction[1].volume for instruction in instructions],
+      use_channels=channels,
+    )
+
+    d_cycles = [instruction[1] for instruction in instructions]
+    wells_to_mix = [d if d.homogenization_volume*d.homogenization_cycles > 0 else None for d in d_cycles]
+
+    if all(m is None for m in wells_to_mix): # no mixing
+      return
+    
+    if any(m is None for m in wells_to_mix): # some mixing
+      raise NotImplementedError("Cannot mix some wells and not others")
+    
+    # mix all wells
+    await self.aspirate(
+          [instruction.container for instruction in wells_to_mix],
+          [0] * len(wells_to_mix),
+          # todo underestimate, because one might already have liquid in it
+          homogenization_volume=[wtm.homogenization_volume for wtm in wells_to_mix],
+          homogenization_cycles=[wtm.homogenization_cycles for wtm in wells_to_mix],
+      )
 
   async def pick_up_tips96(
     self,
