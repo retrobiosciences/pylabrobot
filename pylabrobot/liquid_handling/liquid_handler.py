@@ -9,45 +9,44 @@ import logging
 import numbers
 import threading
 import time
-from typing import Any, Callable, Dict, Union, Optional, List, Sequence, Set, Tuple
 import warnings
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 
-from pylabrobot.machine import MachineFrontend, need_setup_finished
 from pylabrobot.liquid_handling.strictness import Strictness, get_strictness
+from pylabrobot.machine import MachineFrontend, need_setup_finished
 from pylabrobot.plate_reading import PlateReader
 from pylabrobot.resources import (
-  Container,
-  Deck,
-  Resource,
-  ResourceStack,
-  Coordinate,
   CarrierSite,
+  Container,
+  Coordinate,
+  Deck,
   Lid,
   Plate,
+  Resource,
+  ResourceStack,
   Tip,
   TipRack,
   TipSpot,
-  Well,
   TipTracker,
+  Well,
   does_tip_tracking,
-  does_volume_tracking
+  does_volume_tracking,
 )
-from pylabrobot.resources.liquid import Liquid
 from pylabrobot.resources.errors import NoTipError
 from pylabrobot.utils.list import expand
 
 from .backends import LiquidHandlerBackend
 from .standard import (
-  Pickup,
-  PickupTipRack,
-  Drop,
-  DropTipRack,
   Aspiration,
   AspirationPlate,
   Dispense,
   DispensePlate,
+  Drop,
+  DropTipRack,
+  GripDirection,
   Move,
-  GripDirection
+  Pickup,
+  PickupTipRack,
 )
 
 logger = logging.getLogger("pylabrobot")
@@ -555,6 +554,7 @@ class LiquidHandler(MachineFrontend):
     end_delay: float = 0,
     offsets: Union[Optional[Coordinate], Sequence[Optional[Coordinate]]] = None,
     liquid_height: Union[Optional[float], List[Optional[float]]] = None,
+    on_operation_complete: Callable[[], Aspiration] = None,
     **backend_kwargs
   ):
     """ Aspirate liquid from the specified wells.
@@ -653,7 +653,7 @@ class LiquidHandler(MachineFrontend):
     assert len(vols) == len(offsets) == len(flow_rates) == len(liquid_height)
 
     # liquid(s) for each channel. If volume tracking is disabled, use None as the liquid.
-    liquids: List[List[Tuple[Optional[Liquid], float]]] = []
+    liquids = []
     for r, vol in zip(resources, vols):
       if r.tracker.is_disabled or not does_volume_tracking():
         liquids.append([(None, vol)])
@@ -661,9 +661,9 @@ class LiquidHandler(MachineFrontend):
         liquids.append(r.tracker.get_liquids(top_volume=vol))
 
     aspirations = [Aspiration(resource=r, volume=v, offset=o, flow_rate=fr, liquid_height=lh, tip=t,
-                              blow_out_air_volume=0, liquids=lvs)
-                   for r, v, o, fr, lh, t, lvs in
-                    zip(resources, vols, offsets, flow_rates, liquid_height, tips, liquids)]
+                              blow_out_air_volume=0, liquids=lvs, channel=channel)
+                   for r, v, o, fr, lh, t, lvs, channel in
+                    zip(resources, vols, offsets, flow_rates, liquid_height, tips, liquids, use_channels)]
 
     for op in aspirations:
       if does_volume_tracking():
@@ -690,6 +690,10 @@ class LiquidHandler(MachineFrontend):
         if not op.resource.tracker.is_disabled:
           op.resource.tracker.commit()
           op.tip.tracker.commit()
+
+        if on_operation_complete is not None:
+          on_operation_complete(op)
+
       for tracker in self.head.values():
         tracker.commit()
 
@@ -706,6 +710,7 @@ class LiquidHandler(MachineFrontend):
     end_delay: float = 0,
     offsets: Union[Optional[Coordinate], Sequence[Optional[Coordinate]]] = None,
     liquid_height: Union[Optional[float], List[Optional[float]]] = None,
+    on_operation_complete: Callable[[], Dispense] = None,
     **backend_kwargs
   ):
     """ Dispense liquid to the specified channels.
@@ -812,9 +817,9 @@ class LiquidHandler(MachineFrontend):
       liquids = [[(None, vol)] for vol in vols]
 
     dispenses = [Dispense(resource=r, volume=v, offset=o, flow_rate=fr, liquid_height=lh, tip=t,
-                          liquids=lvs, blow_out_air_volume=0) # TODO: get blow_out_air_volume
-                 for r, v, o, fr, lh, t, lvs in
-                  zip(resources, vols, offsets, flow_rates, liquid_height, tips, liquids)]
+                          liquids=lvs, blow_out_air_volume=0, channel=channel) # TODO: get blow_out_air_volume
+                 for r, v, o, fr, lh, t, lvs, channel in
+                  zip(resources, vols, offsets, flow_rates, liquid_height, tips, liquids, use_channels)]
 
     for op in dispenses:
       if does_volume_tracking():
@@ -841,6 +846,9 @@ class LiquidHandler(MachineFrontend):
         if not op.resource.tracker.is_disabled:
           op.resource.tracker.commit()
           op.tip.tracker.commit()
+
+        if on_operation_complete is not None:
+          on_operation_complete(op)
 
     if end_delay > 0:
       time.sleep(end_delay)
@@ -1044,7 +1052,7 @@ class LiquidHandler(MachineFrontend):
       raise ValueError("Aspirating from plate with lid")
 
     # liquid(s) for each channel. If volume tracking is disabled, use None as the liquid.
-    liquids: List[List[Tuple[Optional[Liquid], float]]] = []
+    liquids = []
     for w in plate.get_all_items():
       if w.tracker.is_disabled or not does_volume_tracking():
         liquids.append([(None, volume)])
@@ -1108,7 +1116,7 @@ class LiquidHandler(MachineFrontend):
       raise ValueError("Dispensing to plate with lid")
 
     # liquid(s) for each channel. If volume tracking is disabled, use None as the liquid.
-    liquids: List[List[Tuple[Optional[Liquid], float]]] = []
+    liquids = []
     for w in plate.get_all_items():
       if w.tracker.is_disabled or not does_volume_tracking():
         liquids.append([(None, volume)])
