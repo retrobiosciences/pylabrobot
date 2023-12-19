@@ -58,6 +58,7 @@ class Aspiration:
   liquid_height: Optional[float]
   blow_out_air_volume: float
   liquids: List[Tuple[Optional[Liquid], float]]
+  channel: int
 
 
 @dataclass
@@ -72,6 +73,7 @@ class Dispense:
   liquid_height: Optional[float]
   blow_out_air_volume: float
   liquids: List[Tuple[Optional[Liquid], float]]
+  channel: int
 
 
 @dataclass
