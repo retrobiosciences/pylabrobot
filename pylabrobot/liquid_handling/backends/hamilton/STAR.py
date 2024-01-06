@@ -2271,13 +2271,14 @@ class STAR(HamiltonLiquidHandler):
     # Get center of source plate. Also gripping height and plate width.
     center = resource.get_absolute_location() + resource.center() + offset
     grip_height = center.z + resource.get_size_z() - pickup_distance_from_top
-    plate_width = resource.get_size_x()
-    # plate_width = { # TODO: LH should rotate resources on move_plate
-    #   GripDirection.FRONT: resource.get_size_x(),
-    #   GripDirection.RIGHT: resource.get_size_y(),
-    #   GripDirection.BACK: resource.get_size_x(),
-    #   GripDirection.LEFT: resource.get_size_y(),
-    # }[grip_direction]
+
+    # plate_width = resource.get_size_x()
+    plate_width = { # TODO: LH should rotate resources on move_plate
+      GripDirection.FRONT: resource.get_size_x(),
+      GripDirection.RIGHT: resource.get_size_y(),
+      GripDirection.BACK: resource.get_size_x(),
+      GripDirection.LEFT: resource.get_size_y(),
+    }[grip_direction]
 
     await self.iswap_get_plate(
       x_position=int(center.x * 10),
@@ -2345,9 +2346,9 @@ class STAR(HamiltonLiquidHandler):
     self,
     location: Coordinate,
     resource: Resource,
-    offset: Coordinate,
     grip_direction: GripDirection,
     pickup_distance_from_top: float,
+    offset: Coordinate = Coordinate.zero(),
     minimum_traverse_height_at_beginning_of_a_command: int = 2840,
     z_position_at_the_command_end: int = 2840,
     collision_control_level: int = 0,
@@ -2359,13 +2360,13 @@ class STAR(HamiltonLiquidHandler):
     # Get center of source plate. Also gripping height and plate width.
     center = location + resource.center() + offset
     grip_height = center.z + resource.get_size_z() - pickup_distance_from_top
-    plate_width = resource.get_size_x()
-    # plate_width = { # TODO: LH should rotate resources on move_plate
-    #   GripDirection.FRONT: resource.get_size_x(),
-    #   GripDirection.RIGHT: resource.get_size_y(),
-    #   GripDirection.BACK: resource.get_size_x(),
-    #   GripDirection.LEFT: resource.get_size_y(),
-    # }[grip_direction]
+    # plate_width = resource.get_size_x()
+    plate_width = { # TODO: LH should rotate resources on move_plate
+      GripDirection.FRONT: resource.get_size_x(),
+      GripDirection.RIGHT: resource.get_size_y(),
+      GripDirection.BACK: resource.get_size_x(),
+      GripDirection.LEFT: resource.get_size_y(),
+    }[grip_direction]
 
     await self.iswap_put_plate(
       x_position=int(center.x * 10),

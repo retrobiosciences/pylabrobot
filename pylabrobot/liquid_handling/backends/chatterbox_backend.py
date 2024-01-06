@@ -5,6 +5,7 @@ from typing import List
 from pylabrobot.liquid_handling.backends.backend import LiquidHandlerBackend
 from pylabrobot.resources import Resource
 from pylabrobot.liquid_handling.standard import (
+  GripDirection,
   Pickup,
   PickupTipRack,
   Drop,
@@ -15,6 +16,7 @@ from pylabrobot.liquid_handling.standard import (
   DispensePlate,
   Move
 )
+from pylabrobot.resources.coordinate import Coordinate
 
 
 class ChatterBoxBackend(LiquidHandlerBackend):
@@ -69,3 +71,12 @@ class ChatterBoxBackend(LiquidHandlerBackend):
 
   async def move_resource(self, move: Move, **backend_kwargs):
     print(f"Moving {move}.")
+
+  async def iswap_pick_up_resource(self, resource: Resource, grip_direction: GripDirection, pickup_distance_from_top: float, **backend_kwargs):
+    print(f"Picking {resource}, {grip_direction}, {pickup_distance_from_top}")
+
+  async def iswap_release_picked_up_resource(self, location: Coordinate, resource: Resource, grip_direction: GripDirection, pickup_distance_from_top: float, **backend_kwargs):
+    print(f"Releasing {resource} at {location}, {grip_direction}, {pickup_distance_from_top}")
+
+  async def send_raw_command(self, command: str, **backend_kwargs):
+    print(f"Sending raw command {command}.")
