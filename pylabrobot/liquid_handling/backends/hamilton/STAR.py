@@ -3927,6 +3927,7 @@ class STAR(HamiltonLiquidHandler):
 
   # -------------- 3.5.5 CoRe gripper commands --------------
 
+  @need_iswap_parked
   async def get_core(self, p1: int, p2: int):
     """ Get CoRe gripper tool from wasteblock mount. """
     if not 0 <= p1 < self.num_channels:
@@ -3968,6 +3969,7 @@ class STAR(HamiltonLiquidHandler):
     self._core_parked = True
     return command_output
 
+  @need_iswap_parked
   async def core_pick_up_resource(
       self,
       resource: Resource,
@@ -4020,6 +4022,7 @@ class STAR(HamiltonLiquidHandler):
       minimum_z_position_at_the_command_end=minimum_z_position_at_the_command_end,
     )
 
+  @need_iswap_parked
   async def core_move_picked_up_resource(
       self,
       location: Coordinate,
@@ -4055,14 +4058,17 @@ class STAR(HamiltonLiquidHandler):
         minimum_traverse_height_at_beginning_of_a_command,
     )
 
+  @need_iswap_parked
   async def core_release_picked_up_resource(
       self,
       location: Coordinate,
       resource: Resource,
       pickup_distance_from_top: float,
+      press_on_distance: int = 0,
       offset: Coordinate = Coordinate.zero(),
       minimum_traverse_height_at_beginning_of_a_command: int = 2750,
       z_position_at_the_command_end: int = 2750,
+      return_tool = True
   ):
     """ Place resource with CoRe gripper tool
 
@@ -4087,13 +4093,13 @@ class STAR(HamiltonLiquidHandler):
       x_direction=0,
       y_position=int(center.y * 10),
       z_position=int(grip_height * 10),
-      z_press_on_distance=0,
+      z_press_on_distance=press_on_distance,
       z_speed=500,
       open_gripper_position=int(grip_width*10) + 30,
       minimum_traverse_height_at_beginning_of_a_command=
         minimum_traverse_height_at_beginning_of_a_command,
       z_position_at_the_command_end=z_position_at_the_command_end,
-      return_tool=True
+      return_tool=return_tool
     )
 
   async def core_open_gripper(self):
@@ -4103,6 +4109,7 @@ class STAR(HamiltonLiquidHandler):
       command="ZO")
     return command_output
 
+  @need_iswap_parked
   async def core_get_plate(
       self,
       x_position: int = 0,
@@ -4151,6 +4158,7 @@ class STAR(HamiltonLiquidHandler):
 
     return command_output
 
+  @need_iswap_parked
   async def core_put_plate(
       self,
       x_position: int = 0,
@@ -4170,7 +4178,7 @@ class STAR(HamiltonLiquidHandler):
     assert 0 <= x_direction <= 1, "x_direction must be between 0 and 1"
     assert 0 <= y_position <= 6500, "y_position must be between 0 and 6500"
     assert 0 <= z_position <= 3600, "z_position must be between 0 and 3600"
-    assert 0 <= z_press_on_distance <= 50, "z_press_on_distance must be between 0 and 999"
+    assert 0 <= z_press_on_distance <= 999, "z_press_on_distance must be between 0 and 999"
     assert 0 <= z_speed <= 1600, "z_speed must be between 0 and 1600"
     assert 0 <= open_gripper_position <= 9999, "open_gripper_position must be between 0 and 9999"
     assert 0 <= minimum_traverse_height_at_beginning_of_a_command <= 3600, \
@@ -4197,6 +4205,7 @@ class STAR(HamiltonLiquidHandler):
 
     return command_output
 
+  @need_iswap_parked
   async def core_move_plate_to_position(
       self,
       x_position: int = 0,
