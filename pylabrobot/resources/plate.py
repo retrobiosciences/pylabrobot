@@ -86,13 +86,17 @@ class Plate(ItemizedResource[Well]):
   def assign_child_resource(
     self,
     resource: Resource,
-    location: Optional[Coordinate],
+    location: Optional[Coordinate] = None,
     reassign: bool = True
   ):
     if isinstance(resource, Lid):
       if self.has_lid():
         raise ValueError(f"Plate '{self.name}' already has a lid.")
       self.lid = resource
+      assert self.lid_height > 0, "Lid height must be greater than 0."
+      location = Coordinate(0, 0, self.lid_height)
+    else:
+      assert location is not None, "Location must be specified for if resource is not a lid."
     return super().assign_child_resource(resource, location=location, reassign=reassign)
 
   def unassign_child_resource(self, resource):
