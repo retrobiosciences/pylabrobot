@@ -95,12 +95,12 @@ class Tilter(Machine):
 
     well_drain_offsets = []
     for well in plate.children:
-      level_absolute_well_drain_coordinate = well.get_absolute_location(_hinge_side, "c", "b")
+      level_absolute_well_drain_coordinate = well.get_absolute_location(_hinge_side, "c", "cavity_bottom")
       rotated_absolute_well_drain_coordinate = self.experimental_rotate_coordinate_around_hinge(
         level_absolute_well_drain_coordinate, angle
       )
       well_drain_offset = (rotated_absolute_well_drain_coordinate -
-                           well.get_absolute_location("c", "c", "b"))
+                           well.get_absolute_location("c", "c", "cavity_bottom"))
       well_drain_offsets.append(well_drain_offset)
 
     return well_drain_offsets
@@ -111,7 +111,7 @@ class Tilter(Machine):
       wells: List[Well],
       n_tips: int = 1,
       absolute_angle: Optional[float] = None,
-      tip_orifice_width: float = 0
+      tip_apex_diameter: float = 1.28 # standard tip orifice width
   ) -> List[Coordinate]:
     """ Get the drain edge offsets for the given wells, tilted around the hinge at a
     given absolute angle, for multiple tips.
@@ -128,7 +128,7 @@ class Tilter(Machine):
 
     if absolute_angle is None:
       absolute_angle = self._absolute_angle
-    assert absolute_angle is not None # mypy
+    assert absolute_angle is not None
     angle = absolute_angle * (-1 if self._hinge_coordinate.x >= self._size_x / 2 else 1)
 
     hinge_on_left = self._hinge_coordinate.x < self._size_x / 2
@@ -156,36 +156,37 @@ class Tilter(Machine):
 
         drain_coordinates = [Coordinate(x_offset, y, 0) for y in y_offsets]
       else:
-        # Default case: n_tips = 1
         x_offset = -radius if hinge_on_left else radius
         drain_coordinates = [Coordinate(x_offset, 0, 0)]
 
       offsets = []
       for drain_coordinate in drain_coordinates:
         rotated_drain_coordinate = self.experimental_rotate_coordinate_around_hinge(
-          well.get_absolute_location("c", "c", "b") + drain_coordinate, angle
+          well.get_absolute_location("c", "c", "cavity_bottom") + drain_coordinate, angle
         )
         
-        # adjust for tip orifice width
-        if tip_orifice_width > 0:
+        # adjust for tip apex diameter
+        if tip_apex_diameter > 0:
           theta = math.radians(abs(angle))
-          adjustment = (tip_orifice_width / 2) / math.sin(theta)
           
-          # adjust x and z coordinates
+          # calculate adjustment in x and z directions
+          x_adjustment = (tip_apex_diameter / 2) * math.cos(theta)
+          z_adjustment = (tip_apex_diameter / 2) * math.sin(theta)
+          
           if hinge_on_left:
             rotated_drain_coordinate = Coordinate(
-              rotated_drain_coordinate.x + adjustment * math.cos(theta),
+              rotated_drain_coordinate.x + x_adjustment,
               rotated_drain_coordinate.y,
-              rotated_drain_coordinate.z + adjustment * math.sin(theta)
+              rotated_drain_coordinate.z + z_adjustment
             )
           else:
             rotated_drain_coordinate = Coordinate(
-              rotated_drain_coordinate.x - adjustment * math.cos(theta),
+              rotated_drain_coordinate.x - x_adjustment,
               rotated_drain_coordinate.y,
-              rotated_drain_coordinate.z + adjustment * math.sin(theta)
+              rotated_drain_coordinate.z + z_adjustment
             )
         
-        offset = rotated_drain_coordinate - well.get_absolute_location("c", "c", "b")
+        offset = rotated_drain_coordinate - well.get_absolute_location("c", "c", "cavity_bottom")
         offsets.append(offset)
 
       well_drain_offsets.append(offsets)
