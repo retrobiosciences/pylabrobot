@@ -9,7 +9,7 @@ class HamiltonTiltModule(Tilter):
   def __init__(
     self,
     name: str,
-    com_port: str,
+    # com_port: str,
     child_resource_location: Coordinate = Coordinate(1.0, 3.0, 83.55),
     pedestal_size_z: float = 3.47,
     write_timeout: float = 3,
@@ -31,7 +31,7 @@ class HamiltonTiltModule(Tilter):
       size_y=92.57,
       size_z=85.81,
       backend=HamiltonTiltModuleBackend(
-        com_port=com_port,
+        # com_port=com_port,
         write_timeout=write_timeout,
         timeout=timeout),
       hinge_coordinate=Coordinate(6.18, 0, 72.85),

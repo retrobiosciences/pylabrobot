@@ -13,9 +13,9 @@ from pylabrobot.tilting.tilter_backend import TilterBackend, TiltModuleError
 class HamiltonTiltModuleBackend(TilterBackend):
   """ Backend for the Hamilton tilt module. """
 
-  def __init__(self, com_port: str, write_timeout: float = 10, timeout: float = 10):
+  def __init__(self, write_timeout: float = 10, timeout: float = 10):
     self.setup_finished = False
-    self.com_port = com_port
+    # self.com_port = com_port
     self.serial: Optional[serial.Serial] = None
     self.timeout = timeout
     self.write_timeout = write_timeout
