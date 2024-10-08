@@ -1076,6 +1076,7 @@ class STAR(HamiltonLiquidHandler):
     packet_read_timeout: int = 3,
     read_timeout: int = 30,
     write_timeout: int = 30,
+    core_adjustment: Optional[Coordinate] = Coordinate.zero()
   ):
     """ Create a new STAR interface.
 
@@ -1107,7 +1108,7 @@ class STAR(HamiltonLiquidHandler):
     self._core_parked: Optional[bool] = None
     self._extended_conf: Optional[dict] = None
     self._traversal_height: float = 245.0
-    self.core_adjustment = Coordinate.zero()
+    self.core_adjustment: Optional[Coordinate] = core_adjustment
     self._unsafe = UnSafe(self)
 
   @property
